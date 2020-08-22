@@ -1,6 +1,7 @@
 #include "main.h"
 #include "ascii.h"
-#include "shield.h"
+#include "pic.h"
+#include <math.h>
 
 #define GPF0CON (*(volatile unsigned long *)0xE0200120)
 #define GPF1CON (*(volatile unsigned long *)0xE0200140)
@@ -56,7 +57,10 @@ u32 *pfb = (u32 *)FB_ADDR;
 #define WHITE 0xFFFFFF
 #define BLACK 0x000000
 
-// 初始化LCD
+int raise(int a)
+{
+	return 0;
+}
 void lcd_init(void)
 {
 	// 配置引脚用于LCD功能
@@ -122,7 +126,6 @@ void lcd_init(void)
 	SHADOWCON = 0x1;
 }
 
-//画点
 void lcd_draw_pixel(int x, int y, int color)
 {
 	unsigned long *pixel = (unsigned long *)FB_ADDR;
@@ -130,7 +133,6 @@ void lcd_draw_pixel(int x, int y, int color)
 	return;
 }
 
-// 刷新屏幕颜色
 static void lcd_draw_background(u32 color)
 {
 	u32 i, j;
@@ -144,8 +146,167 @@ static void lcd_draw_background(u32 color)
 	}
 }
 
-// 写字
-// 写字的左上角坐标(x, y)，字的颜色是color，字的字模信息存储在data中
+static void lcd_draw_hline(u32 x1, u32 x2, u32 y, u32 color)
+{
+	u32 x;
+
+	for (x = x1; x < x2; x++)
+	{
+		lcd_draw_pixel(x, y, color);
+	}
+}
+
+void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
+{
+	int dx, dy, e;
+	dx = x2 - x1;
+	dy = y2 - y1;
+
+	if (dx >= 0)
+	{
+		if (dy >= 0) // dy>=0
+		{
+			if (dx >= dy) // 1/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 <= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 += 1;
+						e -= dx;
+					}
+					x1 += 1;
+					e += dy;
+				}
+			}
+			else // 2/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 <= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 += 1;
+						e -= dy;
+					}
+					y1 += 1;
+					e += dx;
+				}
+			}
+		}
+		else // dy<0
+		{
+			dy = -dy; // dy=(dy)
+
+			if (dx >= dy) // 8/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 <= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 -= 1;
+						e -= dx;
+					}
+					x1 += 1;
+					e += dy;
+				}
+			}
+			else // 7/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 >= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 += 1;
+						e -= dy;
+					}
+					y1 -= 1;
+					e += dx;
+				}
+			}
+		}
+	}
+	else //dx<0
+	{
+		dx = -dx;	 //dx=(dx)
+		if (dy >= 0) // dy>=0
+		{
+			if (dx >= dy) // 4/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 >= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 += 1;
+						e -= dx;
+					}
+					x1 -= 1;
+					e += dy;
+				}
+			}
+			else // 3/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 <= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 -= 1;
+						e -= dy;
+					}
+					y1 += 1;
+					e += dx;
+				}
+			}
+		}
+		else // dy<0
+		{
+			dy = -dy; // dy=(dy)
+
+			if (dx >= dy) // 5/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 >= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 -= 1;
+						e -= dx;
+					}
+					x1 -= 1;
+					e += dy;
+				}
+			}
+			else // 6/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 >= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 -= 1;
+						e -= dy;
+					}
+					y1 -= 1;
+					e += dx;
+				}
+			}
+		}
+	}
+}
+
 static void show_8_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
 {
 	// count记录当前正在绘制的像素的次序
@@ -166,45 +327,289 @@ static void show_8_16(unsigned int x, unsigned int y, unsigned int color, unsign
 	}
 }
 
-// 画800×480的图，图像数据存储在pData所指向的数组中
+static void show_16_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
+{
+	// count记录当前正在绘制的像素的次序
+	int i, j, count = 0;
+
+	for (j = y; j < (y + 16); j++)
+	{
+		for (i = x; i < (x + 16); i++)
+		{
+			if (i < XSIZE && j < YSIZE)
+			{
+				// 在坐标(i, j)这个像素处判断是0还是1，如果是1写color；如果是0直接跳过
+				if (data[count / 8] & (1 << (count % 8)))
+					lcd_draw_pixel(i, j, color);
+			}
+			count++;
+		}
+	}
+}
+
+static void show_32_32(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
+{
+	// count记录当前正在绘制的像素的次序
+	int i, j, count = 0;
+
+	for (j = y; j < (y + 32); j++)
+	{
+		for (i = x; i < (x + 32); i++)
+		{
+			if (i < XSIZE && j < YSIZE)
+			{
+				// 在坐标(i, j)这个像素处判断是0还是1，如果是1写color；如果是0直接跳过
+				if (data[count / 8] & (1 << (count % 8)))
+					lcd_draw_pixel(i, j, color);
+			}
+			count++;
+		}
+	}
+}
+
+static void lcd_draw_vline(u32 x, u32 y1, u32 y2, u32 color)
+{
+	u32 y;
+
+	for (y = y1; y < y2; y++)
+	{
+		lcd_draw_pixel(x, y, color);
+	}
+}
+
+void draw_circular(unsigned int centerX, unsigned int centerY, unsigned int radius, unsigned int color)
+{
+	int x, y;
+	int tempX, tempY;
+	;
+	int SquareOfR = radius * radius;
+
+	for (y = 0; y < XSIZE; y++)
+	{
+		for (x = 0; x < YSIZE; x++)
+		{
+			if (y <= centerY && x <= centerX)
+			{
+				tempY = centerY - y;
+				tempX = centerX - x;
+			}
+			else if (y <= centerY && x >= centerX)
+			{
+				tempY = centerY - y;
+				tempX = x - centerX;
+			}
+			else if (y >= centerY && x <= centerX)
+			{
+				tempY = y - centerY;
+				tempX = centerX - x;
+			}
+			else
+			{
+				tempY = y - centerY;
+				tempX = x - centerX;
+			}
+			if ((tempY * tempY + tempX * tempX) <= SquareOfR)
+				lcd_draw_pixel(x, y, color);
+		}
+	}
+}
+
+void draw_ascii_ok32(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
+{
+	int i;
+	unsigned char *ch;
+	for (i = 0; str[i] != '\0'; i++)
+	{
+		ch = (unsigned char *)jmu_32_32[((unsigned char)str[i] - 97) * 8];
+		show_32_32(x, y, color, ch);
+
+		x += 32;
+		if (x >= XSIZE)
+		{
+			x -= XSIZE; // 回车
+			y += 32;	// 换行
+		}
+	}
+}
+
 void lcd_draw_picture(const unsigned char *pData)
 {
 	u32 x, y, color, p = 0, pco = 0;
-
-	for (y = 0; y < ROW; y++)
+	for (x = 0; x < COL; x++)
 	{
-		for (x = 0; x < COL; x++)
+		for (y = 0; y < ROW; y++)
 		{
-			color = (pData[p] & (2 ^ pco)) ? BLACK : WHITE;
-			// 在这里将坐标点(x, y)的那个像素填充上相应的颜色值即可
-			//color = (pData[p] << 0) | (pData[p] << 8) | (pData[p] << 16);
+			if (pco == 2)
+				color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
+			else
+				color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
 			lcd_draw_pixel(x, y, color);
-
 			if (pco > 7)
 			{
 				pco = 0;
-				p += 1;
+				p++;
 			}
-			pco += 1;
+			pco++;
+		}
+	}
+}
+
+void draw_ascii_ok16(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
+{
+	int i;
+	unsigned char *ch;
+	for (i = 0; str[i] != '\0'; i++)
+	{
+		ch = (unsigned char *)ascii_16_16[((unsigned char)str[i] - 97) * 2];
+		show_16_16(x, y, color, ch);
+
+		x += 20;
+		if (x >= XSIZE)
+		{
+			x -= XSIZE; // 回车
+			y += 16;	// 换行
+		}
+	}
+}
+
+void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
+{
+	int i;
+	unsigned char *ch;
+	for (i = 0; str[i] != '\0'; i++)
+	{
+		ch = (unsigned char *)ascii_8_16[(unsigned char)str[i] - 0x20];
+		show_8_16(x, y, color, ch);
+
+		x += 8;
+		if (x >= XSIZE)
+		{
+			x -= XSIZE; // 回车
+			y += 16;	// 换行
+		}
+	}
+}
+
+void draw_triangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int x3, unsigned int y3, unsigned int color)
+{
+	int temp;
+	if (x1 > x2)
+	{
+		temp = x1;
+		x1 = x2;
+		x2 = temp;
+
+		temp = y1;
+		y1 = y2;
+		y2 = temp;
+	}
+
+	if (x1 > x3)
+	{
+		temp = x1;
+		x1 = x3;
+		x3 = temp;
+
+		temp = y1;
+		y1 = y3;
+		y3 = temp;
+	}
+
+	if (x2 > x3)
+	{
+		temp = x2;
+		x2 = x3;
+		x3 = temp;
+
+		temp = y2;
+		y2 = y3;
+		y3 = temp;
+	}
+	int x, y;
+	for (x = 0; x < XSIZE; x++)
+	{
+		for (y = 0; y < YSIZE; y++)
+		{
+			if (((y1 >= y2) & (y2 >= y3)) | ((y1 <= y2) & (y2 <= y3)))
+			{
+				if (((x1 - x3) * y2) <= ((y1 - y3) * x2))
+				{
+					if (((x1 - x2) * y) >= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) >= ((x1 - x3) * y))
+					{
+						lcd_draw_pixel(x, y, color);
+					}
+				}
+				else
+				{
+					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) <= ((y2 - y3) * x) & ((y1 - y3) * x) <= ((x1 - x3) * y))
+					{
+						lcd_draw_pixel(x, y, color);
+					}
+				}
+			}
+
+			else
+			{
+				if (((x1 - x3) * y2) <= ((y1 - y3) * x2))
+				{
+					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) >= ((x1 - x3) * y))
+					{
+						lcd_draw_pixel(x, y, color);
+					}
+				}
+				else
+				{
+					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) <= ((x1 - x3) * y))
+					{
+						lcd_draw_pixel(x, y, color);
+					}
+				}
+			}
 		}
 	}
 }
 
 void lcd_test(void)
 {
-	lcd_init();
-	//lcd_draw_background(WHITE);
-	lcd_draw_picture(gImage_shield);
+	lcd_init(); //1、LCD控制器初始化
+	lcd_draw_background(WHITE);
 
-	/*while (1)
-	{
-		lcd_draw_background(RED);
-		delay();
+	//2、实现屏幕颜色自动切换（红-绿-蓝-黑-白及多种灰色）。
+	/*
+	lcd_draw_background(RED);
+	delay();
+	lcd_draw_background(GREEN);
+	delay();
+	lcd_draw_background(BLUE);
+	delay();
+	*/
+	//3、几何图形的显示（矩形、三角形、五角星、椭圆）。
+	draw_triangle(400, 400, 500, 200, 600, 400, RED);
 
-		lcd_draw_background(GREEN);
-		delay();
+	//5、画图（小组成员合照一张，要求能辨别出人，单色显示，分辨率不宜太大，编译后的bin文件不大于16K）。
+	//lcd_draw_picture(gImage_pic);
 
-		lcd_draw_background(BLUE);
-		delay();
-	}*/
+	//4、显示不同大小的英文、中文字符（学号、姓名、姓名拼音、集美大学诚毅学院）。
+	/*
+	draw_ascii_ok32(950, 50, RED, "a");//jmu，cycu
+	draw_ascii_ok32(950, 80, RED, "b");
+	draw_ascii_ok32(950, 120, RED, "c");
+	draw_ascii_ok32(950, 160, RED, "d");
+	draw_ascii_ok32(950, 200, RED, "e");
+	draw_ascii_ok32(950, 240, RED, "f");
+	draw_ascii_ok32(950, 280, RED, "g");
+	draw_ascii_ok32(950, 320, RED, "h");
+
+	draw_ascii_ok16(100, 10, BLUE, "ijk"); //FY
+	draw_ascii_ok8(160, 10, BLUE, "Chen Feiyuan");
+	draw_ascii_ok8(100, 30, BLUE, "201741053072");
+
+	draw_ascii_ok16(370, 10, BLUE, "lmn"); //JM
+	draw_ascii_ok8(430, 10, BLUE, "Lin Junming");
+	draw_ascii_ok8(370, 30, BLUE, "201741053057");
+
+	draw_ascii_ok16(680, 10, BLUE, "opq"); //ZH
+	draw_ascii_ok8(740, 10, BLUE, "Wu Zhenhang");
+	draw_ascii_ok8(680, 30, BLUE, "201741053075");
+	*/
 }
