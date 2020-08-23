@@ -1,7 +1,6 @@
 #include "main.h"
 #include "ascii.h"
 #include "pic.h"
-#include <math.h>
 
 #define GPF0CON (*(volatile unsigned long *)0xE0200120)
 #define GPF1CON (*(volatile unsigned long *)0xE0200140)
@@ -57,10 +56,96 @@ u32 *pfb = (u32 *)FB_ADDR;
 #define WHITE 0xFFFFFF
 #define BLACK 0x000000
 
-int raise(int a)
+// 定义操作寄存器的宏
+#define GPH0CON 0xE0200C00
+#define GPH0DAT 0xE0200C04
+
+#define GPH2CON 0xE0200C40
+#define GPH2DAT 0xE0200C44
+
+#define rGPH0CON (*(volatile unsigned int *)GPH0CON)
+#define rGPH0DAT (*(volatile unsigned int *)GPH0DAT)
+#define rGPH2CON (*(volatile unsigned int *)GPH2CON)
+#define rGPH2DAT (*(volatile unsigned int *)GPH2DAT)
+
+// 初始化按键
+void key_init(void)
 {
-	return 0;
+	//rGPH2CON&=~(0xffff);
+	rGPH2CON &= ~(0xFFFF << 0);
+	//rGPH0CON&=~(0xff<<8);
+	rGPH0CON &= ~(0xFF << 8);
 }
+
+void delay20ms(void)
+{
+	int i, j;
+
+	for (i = 0; i < 100; i++)
+	{
+		for (j = 0; j < 1000; j++)
+		{
+			i *j;
+		}
+	}
+}
+
+int key_polling(void)
+{
+	while (1)
+	{
+		if (!(rGPH0DAT & (1 << 2)))
+		{
+			delay20ms();
+			if (!(rGPH0DAT & (1 << 2)))
+			{
+				//uart_putc('1');
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 1)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 1)))
+			{
+				//uart_putc('4');
+			}
+		}
+		else if (!(rGPH0DAT & (1 << 3)))
+		{
+			delay20ms();
+			if (!(rGPH0DAT & (1 << 3)))
+			{
+				//uart_putc('2');
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 0)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 0)))
+			{
+				//uart_putc('3');
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 3)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 3)))
+			{
+				//uart_putc('6');
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 2)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 2)))
+			{
+				//uart_putc('5');
+			}
+		}
+	}
+}
+// No rule to make target `uart.c', needed by `led.bin'.  Stop.
+
 void lcd_init(void)
 {
 	// 配置引脚用于LCD功能
@@ -146,167 +231,6 @@ static void lcd_draw_background(u32 color)
 	}
 }
 
-static void lcd_draw_hline(u32 x1, u32 x2, u32 y, u32 color)
-{
-	u32 x;
-
-	for (x = x1; x < x2; x++)
-	{
-		lcd_draw_pixel(x, y, color);
-	}
-}
-
-void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
-{
-	int dx, dy, e;
-	dx = x2 - x1;
-	dy = y2 - y1;
-
-	if (dx >= 0)
-	{
-		if (dy >= 0) // dy>=0
-		{
-			if (dx >= dy) // 1/8 octant
-			{
-				e = dy - dx / 2;
-				while (x1 <= x2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						y1 += 1;
-						e -= dx;
-					}
-					x1 += 1;
-					e += dy;
-				}
-			}
-			else // 2/8 octant
-			{
-				e = dx - dy / 2;
-				while (y1 <= y2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						x1 += 1;
-						e -= dy;
-					}
-					y1 += 1;
-					e += dx;
-				}
-			}
-		}
-		else // dy<0
-		{
-			dy = -dy; // dy=(dy)
-
-			if (dx >= dy) // 8/8 octant
-			{
-				e = dy - dx / 2;
-				while (x1 <= x2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						y1 -= 1;
-						e -= dx;
-					}
-					x1 += 1;
-					e += dy;
-				}
-			}
-			else // 7/8 octant
-			{
-				e = dx - dy / 2;
-				while (y1 >= y2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						x1 += 1;
-						e -= dy;
-					}
-					y1 -= 1;
-					e += dx;
-				}
-			}
-		}
-	}
-	else //dx<0
-	{
-		dx = -dx;	 //dx=(dx)
-		if (dy >= 0) // dy>=0
-		{
-			if (dx >= dy) // 4/8 octant
-			{
-				e = dy - dx / 2;
-				while (x1 >= x2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						y1 += 1;
-						e -= dx;
-					}
-					x1 -= 1;
-					e += dy;
-				}
-			}
-			else // 3/8 octant
-			{
-				e = dx - dy / 2;
-				while (y1 <= y2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						x1 -= 1;
-						e -= dy;
-					}
-					y1 += 1;
-					e += dx;
-				}
-			}
-		}
-		else // dy<0
-		{
-			dy = -dy; // dy=(dy)
-
-			if (dx >= dy) // 5/8 octant
-			{
-				e = dy - dx / 2;
-				while (x1 >= x2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						y1 -= 1;
-						e -= dx;
-					}
-					x1 -= 1;
-					e += dy;
-				}
-			}
-			else // 6/8 octant
-			{
-				e = dx - dy / 2;
-				while (y1 >= y2)
-				{
-					lcd_draw_pixel(x1, y1, color);
-					if (e > 0)
-					{
-						x1 -= 1;
-						e -= dy;
-					}
-					y1 -= 1;
-					e += dx;
-				}
-			}
-		}
-	}
-}
-
 static void show_8_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
 {
 	// count记录当前正在绘制的像素的次序
@@ -364,16 +288,6 @@ static void show_32_32(unsigned int x, unsigned int y, unsigned int color, unsig
 			}
 			count++;
 		}
-	}
-}
-
-static void lcd_draw_vline(u32 x, u32 y1, u32 y2, u32 color)
-{
-	u32 y;
-
-	for (y = y1; y < y2; y++)
-	{
-		lcd_draw_pixel(x, y, color);
 	}
 }
 
@@ -439,10 +353,7 @@ void lcd_draw_picture(const unsigned char *pData)
 	{
 		for (y = 0; y < ROW; y++)
 		{
-			if (pco == 2)
-				color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
-			else
-				color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
+			color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
 			lcd_draw_pixel(x, y, color);
 			if (pco > 7)
 			{
@@ -490,80 +401,207 @@ void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned
 	}
 }
 
-void draw_triangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int x3, unsigned int y3, unsigned int color)
+static void lcd_draw_vline(u32 x, u32 y1, u32 y2, u32 color)
 {
-	int temp;
-	if (x1 > x2)
-	{
-		temp = x1;
-		x1 = x2;
-		x2 = temp;
+	u32 y;
 
-		temp = y1;
-		y1 = y2;
-		y2 = temp;
+	for (y = y1; y < y2; y++)
+	{
+		lcd_draw_pixel(x, y, color);
 	}
+}
 
-	if (x1 > x3)
+static void lcd_draw_hline(u32 x1, u32 x2, u32 y, u32 color)
+{
+	u32 x;
+
+	for (x = x1; x < x2; x++)
 	{
-		temp = x1;
-		x1 = x3;
-		x3 = temp;
-
-		temp = y1;
-		y1 = y3;
-		y3 = temp;
+		lcd_draw_pixel(x, y, color);
 	}
+}
 
-	if (x2 > x3)
-	{
-		temp = x2;
-		x2 = x3;
-		x3 = temp;
+void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
+{
+	int dx, dy, e;
+	dx = x2 - x1;
+	dy = y2 - y1;
 
-		temp = y2;
-		y2 = y3;
-		y3 = temp;
-	}
-	int x, y;
-	for (x = 0; x < XSIZE; x++)
+	if (dx >= 0)
 	{
-		for (y = 0; y < YSIZE; y++)
+		if (dy >= 0) // dy>=0
 		{
-			if (((y1 >= y2) & (y2 >= y3)) | ((y1 <= y2) & (y2 <= y3)))
+			if (dx >= dy) // 1/8 octant
 			{
-				if (((x1 - x3) * y2) <= ((y1 - y3) * x2))
+				e = dy - dx / 2;
+				while (x1 <= x2)
 				{
-					if (((x1 - x2) * y) >= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) >= ((x1 - x3) * y))
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
 					{
-						lcd_draw_pixel(x, y, color);
+						y1 += 1;
+						e -= dx;
 					}
-				}
-				else
-				{
-					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) <= ((y2 - y3) * x) & ((y1 - y3) * x) <= ((x1 - x3) * y))
-					{
-						lcd_draw_pixel(x, y, color);
-					}
+					x1 += 1;
+					e += dy;
 				}
 			}
-
-			else
+			else // 2/8 octant
 			{
-				if (((x1 - x3) * y2) <= ((y1 - y3) * x2))
+				e = dx - dy / 2;
+				while (y1 <= y2)
 				{
-					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) >= ((x1 - x3) * y))
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
 					{
-						lcd_draw_pixel(x, y, color);
+						x1 += 1;
+						e -= dy;
 					}
+					y1 += 1;
+					e += dx;
 				}
-				else
+			}
+		}
+		else // dy<0
+		{
+			dy = -dy; // dy=abs(dy)
+
+			if (dx >= dy) // 8/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 <= x2)
 				{
-					if (((x1 - x2) * y) <= ((y1 - y2) * x) & ((x2 - x3) * y) >= ((y2 - y3) * x) & ((y1 - y3) * x) <= ((x1 - x3) * y))
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
 					{
-						lcd_draw_pixel(x, y, color);
+						y1 -= 1;
+						e -= dx;
 					}
+					x1 += 1;
+					e += dy;
 				}
+			}
+			else // 7/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 >= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 += 1;
+						e -= dy;
+					}
+					y1 -= 1;
+					e += dx;
+				}
+			}
+		}
+	}
+	else //dx<0
+	{
+		dx = -dx;	 //dx=abs(dx)
+		if (dy >= 0) // dy>=0
+		{
+			if (dx >= dy) // 4/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 >= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 += 1;
+						e -= dx;
+					}
+					x1 -= 1;
+					e += dy;
+				}
+			}
+			else // 3/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 <= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 -= 1;
+						e -= dy;
+					}
+					y1 += 1;
+					e += dx;
+				}
+			}
+		}
+		else // dy<0
+		{
+			dy = -dy; // dy=abs(dy)
+
+			if (dx >= dy) // 5/8 octant
+			{
+				e = dy - dx / 2;
+				while (x1 >= x2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						y1 -= 1;
+						e -= dx;
+					}
+					x1 -= 1;
+					e += dy;
+				}
+			}
+			else // 6/8 octant
+			{
+				e = dx - dy / 2;
+				while (y1 >= y2)
+				{
+					lcd_draw_pixel(x1, y1, color);
+					if (e > 0)
+					{
+						x1 -= 1;
+						e -= dy;
+					}
+					y1 -= 1;
+					e += dx;
+				}
+			}
+		}
+	}
+}
+
+void draw_rectangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
+{
+	int x, y, temp;
+	if (x1 > x2)
+	{
+		temp = x2;
+		x2 = x1;
+		x1 = temp;
+
+		temp = y2;
+		y2 = y1;
+		y1 = temp;
+	}
+	if (y1 < y2)
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y <= y2; y++)
+			{
+				lcd_draw_pixel(x1, y1, color);
+			}
+		}
+	}
+	else
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y >= y2; y--)
+			{
+				lcd_draw_pixel(x1, y1, color);
 			}
 		}
 	}
@@ -571,8 +609,131 @@ void draw_triangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned i
 
 void lcd_test(void)
 {
+	int keycase = 0,
+		udcase = 0,
+		lrcase = 0;
 	lcd_init(); //1、LCD控制器初始化
 	lcd_draw_background(WHITE);
+
+	while (1)
+	{
+		if (!(rGPH0DAT & (1 << 2)))
+		{
+			delay20ms();
+			if (!(rGPH0DAT & (1 << 2)))
+			{
+				keycase = 1; //left
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 1)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 1)))
+			{
+				keycase = 2; //right
+			}
+		}
+		else if (!(rGPH0DAT & (1 << 3)))
+		{
+			delay20ms();
+			if (!(rGPH0DAT & (1 << 3)))
+			{
+				keycase = 3; //down
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 0)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 0)))
+			{
+				keycase = 4; //up
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 3)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 3)))
+			{
+				keycase = 5; //menu
+			}
+		}
+		else if (!(rGPH2DAT & (1 << 2)))
+		{
+			delay20ms();
+			if (!(rGPH2DAT & (1 << 2)))
+			{
+				keycase = 6; //back
+			}
+		}
+
+		switch (keycase)
+		{
+		case 1:
+			lcd_draw_background(WHITE);
+			switch (lrcase)
+			{
+			case 0:
+				lrcase++;
+				draw_rectangle(200, 100, 824, 500, BLUE);
+				break;
+			case 1:
+				lrcase++;
+				lcd_draw_hline(400, 600, 400, BLUE);
+				glib_line(400, 400, 500, 200, BLUE);
+				glib_line(600, 400, 500, 200, BLUE);
+				break;
+			case 2:
+				lrcase++;
+				glib_line(0, 245, 260, 245, BLUE);
+				glib_line(130, 150, 210, 390, BLUE);
+				glib_line(50, 390, 260, 245, BLUE);
+				glib_line(0, 245, 210, 390, BLUE);
+				glib_line(50, 390, 130, 150, BLUE);
+				break;
+			case 3:
+				lrcase = 0;
+				draw_circular(300, 512, 50, BLUE);
+				break;
+			default:
+				lrcase = 0;
+				break;
+			}
+			break;
+		case 2:
+			lcd_draw_background(WHITE);
+			switch (lrcase)
+			{
+			case 0:
+				lrcase = 3;
+				draw_rectangle(200, 100, 824, 500, BLUE);
+				break;
+			case 1:
+				lrcase--;
+				lcd_draw_hline(400, 600, 400, BLUE);
+				glib_line(400, 400, 500, 200, BLUE);
+				glib_line(600, 400, 500, 200, BLUE);
+				break;
+			case 2:
+				lrcase--;
+				glib_line(0, 245, 260, 245, BLUE);
+				glib_line(130, 150, 210, 390, BLUE);
+				glib_line(50, 390, 260, 245, BLUE);
+				glib_line(0, 245, 210, 390, BLUE);
+				glib_line(50, 390, 130, 150, BLUE);
+				break;
+			case 3:
+				lrcase--;
+				draw_circular(300, 512, 50, BLUE);
+				break;
+			default:
+				lrcase = 3;
+				break;
+			}
+			break;
+		default:
+			break;
+		}
+	}
 
 	//2、实现屏幕颜色自动切换（红-绿-蓝-黑-白及多种灰色）。
 	/*
@@ -584,7 +745,7 @@ void lcd_test(void)
 	delay();
 	*/
 	//3、几何图形的显示（矩形、三角形、五角星、椭圆）。
-	draw_triangle(400, 400, 500, 200, 600, 400, RED);
+	//draw_triangle(400, 400, 500, 200, 600, 400, RED);
 
 	//5、画图（小组成员合照一张，要求能辨别出人，单色显示，分辨率不宜太大，编译后的bin文件不大于16K）。
 	//lcd_draw_picture(gImage_pic);
