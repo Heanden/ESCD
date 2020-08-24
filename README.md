@@ -10,6 +10,8 @@
 
 #### 3、程序流程图
 
+![main](https://raw.githubusercontent.com/Heanden/ESCD/master/main.png)
+
 #### 4、主要程序分析
 
 ### 三、调试
