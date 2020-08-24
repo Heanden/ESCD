@@ -90,62 +90,6 @@ void delay20ms(void)
 	}
 }
 
-int key_polling(void)
-{
-	while (1)
-	{
-		if (!(rGPH0DAT & (1 << 2)))
-		{
-			delay20ms();
-			if (!(rGPH0DAT & (1 << 2)))
-			{
-				//uart_putc('1');
-			}
-		}
-		else if (!(rGPH2DAT & (1 << 1)))
-		{
-			delay20ms();
-			if (!(rGPH2DAT & (1 << 1)))
-			{
-				//uart_putc('4');
-			}
-		}
-		else if (!(rGPH0DAT & (1 << 3)))
-		{
-			delay20ms();
-			if (!(rGPH0DAT & (1 << 3)))
-			{
-				//uart_putc('2');
-			}
-		}
-		else if (!(rGPH2DAT & (1 << 0)))
-		{
-			delay20ms();
-			if (!(rGPH2DAT & (1 << 0)))
-			{
-				//uart_putc('3');
-			}
-		}
-		else if (!(rGPH2DAT & (1 << 3)))
-		{
-			delay20ms();
-			if (!(rGPH2DAT & (1 << 3)))
-			{
-				//uart_putc('6');
-			}
-		}
-		else if (!(rGPH2DAT & (1 << 2)))
-		{
-			delay20ms();
-			if (!(rGPH2DAT & (1 << 2)))
-			{
-				//uart_putc('5');
-			}
-		}
-	}
-}
-// No rule to make target `uart.c', needed by `led.bin'.  Stop.
-
 void lcd_init(void)
 {
 	// 配置引脚用于LCD功能
@@ -294,35 +238,11 @@ static void show_32_32(unsigned int x, unsigned int y, unsigned int color, unsig
 void draw_circular(unsigned int centerX, unsigned int centerY, unsigned int radius, unsigned int color)
 {
 	int x, y;
-	int tempX, tempY;
-	;
-	int SquareOfR = radius * radius;
-
 	for (y = 0; y < XSIZE; y++)
 	{
 		for (x = 0; x < YSIZE; x++)
 		{
-			if (y <= centerY && x <= centerX)
-			{
-				tempY = centerY - y;
-				tempX = centerX - x;
-			}
-			else if (y <= centerY && x >= centerX)
-			{
-				tempY = centerY - y;
-				tempX = x - centerX;
-			}
-			else if (y >= centerY && x <= centerX)
-			{
-				tempY = y - centerY;
-				tempX = centerX - x;
-			}
-			else
-			{
-				tempY = y - centerY;
-				tempX = x - centerX;
-			}
-			if ((tempY * tempY + tempX * tempX) <= SquareOfR)
+			if (((y - centerY) * (y - centerY) + (x - centerX) * (x - centerX)) <= radius * radius)
 				lcd_draw_pixel(x, y, color);
 		}
 	}
@@ -337,11 +257,29 @@ void draw_ascii_ok32(unsigned int x, unsigned int y, unsigned int color, unsigne
 		ch = (unsigned char *)jmu_32_32[((unsigned char)str[i] - 97) * 8];
 		show_32_32(x, y, color, ch);
 
-		x += 32;
+		x += 40;
 		if (x >= XSIZE)
 		{
 			x -= XSIZE; // 回车
 			y += 32;	// 换行
+		}
+	}
+}
+
+void lcd_draw_pictures(unsigned int px, unsigned int py, unsigned int pc, unsigned int pr, const unsigned char *pData)
+{
+	u32 x, y, color, p = 0, pco = 0;
+	for (x = px; x < px + pc; x++)
+	{
+		for (y = py; y < py + pr; y++)
+		{
+			lcd_draw_pixel(x, y, (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE);
+			if (pco > 7)
+			{
+				pco = 0;
+				p++;
+			}
+			pco++;
 		}
 	}
 }
@@ -352,9 +290,9 @@ void lcd_draw_picture(const unsigned char *pData)
 	for (x = 0; x < COL; x++)
 	{
 		for (y = 0; y < ROW; y++)
+
 		{
-			color = (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE;
-			lcd_draw_pixel(x, y, color);
+			lcd_draw_pixel(x, y, (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE);
 			if (pco > 7)
 			{
 				pco = 0;
@@ -392,7 +330,7 @@ void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned
 		ch = (unsigned char *)ascii_8_16[(unsigned char)str[i] - 0x20];
 		show_8_16(x, y, color, ch);
 
-		x += 8;
+		x += 10;
 		if (x >= XSIZE)
 		{
 			x -= XSIZE; // 回车
@@ -401,26 +339,87 @@ void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned
 	}
 }
 
-static void lcd_draw_vline(u32 x, u32 y1, u32 y2, u32 color)
+void draw_rectangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
 {
-	u32 y;
-
-	for (y = y1; y < y2; y++)
+	int x, y, temp;
+	if (x1 > x2)
 	{
-		lcd_draw_pixel(x, y, color);
+		temp = x2;
+		x2 = x1;
+		x1 = temp;
+
+		temp = y2;
+		y2 = y1;
+		y1 = temp;
+	}
+
+	if (y1 < y2)
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y <= y2; y++)
+
+			{
+				lcd_draw_pixel(x, y, color);
+			}
+		}
+	}
+	else
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y >= y2; y--)
+			{
+				lcd_draw_pixel(x, y, color);
+			}
+		}
 	}
 }
 
-static void lcd_draw_hline(u32 x1, u32 x2, u32 y, u32 color)
+void draw_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned y2, unsigned int color)
 {
-	u32 x;
-
-	for (x = x1; x < x2; x++)
+	int x, y;
+	int temp;
+	if (x1 > x2)
 	{
-		lcd_draw_pixel(x, y, color);
+		temp = x1;
+		x1 = x2;
+		x2 = temp;
+
+		temp = y1;
+		y1 = y2;
+		y2 = temp;
+	}
+
+	if (y1 < y2)
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y <= y2; y++)
+			{
+				if ((x1 - x) * (y2 - y) == (y1 - y) * (x2 - x))
+				{
+					lcd_draw_pixel(x, y, color);
+				}
+			}
+		}
+	}
+	else
+	{
+		for (x = x1; x <= x2; x++)
+		{
+			for (y = y1; y >= y2; y--)
+			{
+				if ((x1 - x) * (y2 - y) == (y1 - y) * (x2 - x))
+				{
+					lcd_draw_pixel(x, y, color);
+				}
+			}
+		}
 	}
 }
 
+// glib库中的画线函数，可以画斜线，线两端分别是(x1, y1)和(x2, y2)
 void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
 {
 	int dx, dy, e;
@@ -572,205 +571,161 @@ void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y
 	}
 }
 
-void draw_rectangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
+void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3, unsigned int color)
 {
-	int x, y, temp;
-	if (x1 > x2)
+	int x, y;
+	for (x = 0; x <= COL; x++)
 	{
-		temp = x2;
-		x2 = x1;
-		x1 = temp;
-
-		temp = y2;
-		y2 = y1;
-		y1 = temp;
-	}
-	if (y1 < y2)
-	{
-		for (x = x1; x <= x2; x++)
+		for (y = 0; y <= ROW; y++)
 		{
-			for (y = y1; y <= y2; y++)
-			{
-				lcd_draw_pixel(x1, y1, color);
-			}
-		}
-	}
-	else
-	{
-		for (x = x1; x <= x2; x++)
-		{
-			for (y = y1; y >= y2; y--)
-			{
-				lcd_draw_pixel(x1, y1, color);
-			}
+			if (((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) + ((x3 - x2) * (y - y2) - (y3 - y2) * (x - x2)) + ((x3 - x1) * (y - y1) - (y3 - y1) * (x - x1)) <= (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1))
+				lcd_draw_pixel(x, y, color);
 		}
 	}
 }
 
 void lcd_test(void)
 {
-	int keycase = 0,
-		udcase = 0,
-		lrcase = 0;
+	int menucase = 0;
 	lcd_init(); //1、LCD控制器初始化
-	lcd_draw_background(WHITE);
+
+	lcd_draw_background(0x000000);
+	//draw_triangle(100, 200, 500, 500, 300, 100, BLUE);
+
+	int pic_case = 0;
 
 	while (1)
 	{
-		if (!(rGPH0DAT & (1 << 2)))
+		if (!(rGPH0DAT & (1 << 2))) //left合照
 		{
 			delay20ms();
 			if (!(rGPH0DAT & (1 << 2)))
 			{
-				keycase = 1; //left
+				if (menucase == 1)
+				{
+					lcd_draw_background(WHITE);
+					lcd_draw_pictures(288, 164, 448, 272, gImage_pic);
+					pic_case = 1;
+				}
 			}
 		}
-		else if (!(rGPH2DAT & (1 << 1)))
+		else if (!(rGPH2DAT & (1 << 1))) //right 图形
 		{
 			delay20ms();
 			if (!(rGPH2DAT & (1 << 1)))
 			{
-				keycase = 2; //right
+				if (menucase == 1)
+				{
+					lcd_draw_background(WHITE);
+					delay();
+					//draw_triangle(100, 200, 500, 500, 300, 100, BLUE);
+					draw_rectangle(700, 200, 1000, 400, BLUE);
+					delay();
+
+					draw_line(400, 400, 500, 200, BLUE);
+					draw_line(600, 400, 500, 200, BLUE);
+					draw_line(600, 400, 400, 400, BLUE);
+
+					glib_line(0, 245, 260, 245, BLUE);
+					glib_line(130, 150, 210, 390, BLUE);
+					glib_line(50, 390, 260, 245, BLUE);
+					glib_line(0, 245, 210, 390, BLUE);
+					glib_line(50, 390, 130, 150, BLUE);
+					delay();
+
+					draw_circular(399, 239, 50, BLUE);
+				}
+				menucase = 0; //right
 			}
 		}
-		else if (!(rGPH0DAT & (1 << 3)))
+		else if (!(rGPH0DAT & (1 << 3))) //down 文字
 		{
 			delay20ms();
 			if (!(rGPH0DAT & (1 << 3)))
 			{
-				keycase = 3; //down
+				if (menucase == 1)
+				{
+					if (pic_case != 1)
+					{
+						lcd_draw_background(WHITE);
+						pic_case = 0;
+					}
+					draw_ascii_ok32(352, 150, RED, "abcdefgh"); //jmu，cycu
+
+					draw_ascii_ok16(288, 450, BLUE, "ijk"); //FY
+					draw_ascii_ok8(288, 480, BLUE, "Chen Feiyuan");
+					draw_ascii_ok8(288, 500, BLUE, "201741053072");
+
+					draw_ascii_ok16(560, 450, 0XF19EC2, "lmn"); //JM
+					draw_ascii_ok8(560, 480, BLUE, "Lin Junming");
+					draw_ascii_ok8(560, 500, BLUE, "201741053057");
+
+					draw_ascii_ok16(420, 450, BLUE, "opq"); //ZH
+					draw_ascii_ok8(420, 480, BLUE, "Wu Zhenhang");
+					draw_ascii_ok8(420, 500, BLUE, "201741053075");
+				}
+				menucase == 1;
 			}
 		}
-		else if (!(rGPH2DAT & (1 << 0)))
+		else if (!(rGPH2DAT & (1 << 0))) //up屏幕刷新
 		{
 			delay20ms();
 			if (!(rGPH2DAT & (1 << 0)))
 			{
-				keycase = 4; //up
+				if (menucase == 1)
+				{
+					lcd_draw_background(RED);
+					delay();
+					lcd_draw_background(GREEN);
+					delay();
+					lcd_draw_background(BLUE);
+					delay();
+					lcd_draw_background(BLACK);
+					delay();
+					lcd_draw_background(WHITE);
+					delay();
+					lcd_draw_background(0XE0E0E0);
+					delay();
+					lcd_draw_background(0XC0C0C0);
+					delay();
+					lcd_draw_background(0XA0A0A0);
+					delay();
+					lcd_draw_background(0X808080);
+					delay();
+					lcd_draw_background(0X606060);
+					delay();
+					lcd_draw_background(0X404040);
+					delay();
+					lcd_draw_background(0X202020);
+					delay();
+					lcd_draw_background(BLACK);
+				} //up
+				menucase = 0;
 			}
 		}
-		else if (!(rGPH2DAT & (1 << 3)))
+		else if (!(rGPH2DAT & (1 << 3))) //menu 菜单
 		{
 			delay20ms();
 			if (!(rGPH2DAT & (1 << 3)))
 			{
-				keycase = 5; //menu
+				menucase = 1;
+				lcd_draw_background(WHITE);
+				draw_ascii_ok8(427, 250, BLUE, "MENU");
+				draw_ascii_ok8(427, 275, BLUE, "Screen Fresh <-up");
+				draw_ascii_ok8(427, 300, BLUE, "Text         <-down");
+				draw_ascii_ok8(427, 325, BLUE, "Group Photo  <-left");
+				draw_ascii_ok8(427, 350, BLUE, "Graphics     <-right"); //menu
 			}
 		}
-		else if (!(rGPH2DAT & (1 << 2)))
+		else if (!(rGPH2DAT & (1 << 2))) //back
 		{
 			delay20ms();
 			if (!(rGPH2DAT & (1 << 2)))
 			{
-				keycase = 6; //back
+				lcd_draw_background(0x000000);
+				//back
+				menucase = 0;
 			}
-		}
-
-		switch (keycase)
-		{
-		case 1:
-			lcd_draw_background(WHITE);
-			switch (lrcase)
-			{
-			case 0:
-				lrcase++;
-				draw_rectangle(200, 100, 824, 500, BLUE);
-				break;
-			case 1:
-				lrcase++;
-				lcd_draw_hline(400, 600, 400, BLUE);
-				glib_line(400, 400, 500, 200, BLUE);
-				glib_line(600, 400, 500, 200, BLUE);
-				break;
-			case 2:
-				lrcase++;
-				glib_line(0, 245, 260, 245, BLUE);
-				glib_line(130, 150, 210, 390, BLUE);
-				glib_line(50, 390, 260, 245, BLUE);
-				glib_line(0, 245, 210, 390, BLUE);
-				glib_line(50, 390, 130, 150, BLUE);
-				break;
-			case 3:
-				lrcase = 0;
-				draw_circular(300, 512, 50, BLUE);
-				break;
-			default:
-				lrcase = 0;
-				break;
-			}
-			break;
-		case 2:
-			lcd_draw_background(WHITE);
-			switch (lrcase)
-			{
-			case 0:
-				lrcase = 3;
-				draw_rectangle(200, 100, 824, 500, BLUE);
-				break;
-			case 1:
-				lrcase--;
-				lcd_draw_hline(400, 600, 400, BLUE);
-				glib_line(400, 400, 500, 200, BLUE);
-				glib_line(600, 400, 500, 200, BLUE);
-				break;
-			case 2:
-				lrcase--;
-				glib_line(0, 245, 260, 245, BLUE);
-				glib_line(130, 150, 210, 390, BLUE);
-				glib_line(50, 390, 260, 245, BLUE);
-				glib_line(0, 245, 210, 390, BLUE);
-				glib_line(50, 390, 130, 150, BLUE);
-				break;
-			case 3:
-				lrcase--;
-				draw_circular(300, 512, 50, BLUE);
-				break;
-			default:
-				lrcase = 3;
-				break;
-			}
-			break;
-		default:
-			break;
 		}
 	}
-
-	//2、实现屏幕颜色自动切换（红-绿-蓝-黑-白及多种灰色）。
-	/*
-	lcd_draw_background(RED);
-	delay();
-	lcd_draw_background(GREEN);
-	delay();
-	lcd_draw_background(BLUE);
-	delay();
-	*/
-	//3、几何图形的显示（矩形、三角形、五角星、椭圆）。
-	//draw_triangle(400, 400, 500, 200, 600, 400, RED);
-
-	//5、画图（小组成员合照一张，要求能辨别出人，单色显示，分辨率不宜太大，编译后的bin文件不大于16K）。
-	//lcd_draw_picture(gImage_pic);
-
-	//4、显示不同大小的英文、中文字符（学号、姓名、姓名拼音、集美大学诚毅学院）。
-	/*
-	draw_ascii_ok32(950, 50, RED, "a");//jmu，cycu
-	draw_ascii_ok32(950, 80, RED, "b");
-	draw_ascii_ok32(950, 120, RED, "c");
-	draw_ascii_ok32(950, 160, RED, "d");
-	draw_ascii_ok32(950, 200, RED, "e");
-	draw_ascii_ok32(950, 240, RED, "f");
-	draw_ascii_ok32(950, 280, RED, "g");
-	draw_ascii_ok32(950, 320, RED, "h");
-
-	draw_ascii_ok16(100, 10, BLUE, "ijk"); //FY
-	draw_ascii_ok8(160, 10, BLUE, "Chen Feiyuan");
-	draw_ascii_ok8(100, 30, BLUE, "201741053072");
-
-	draw_ascii_ok16(370, 10, BLUE, "lmn"); //JM
-	draw_ascii_ok8(430, 10, BLUE, "Lin Junming");
-	draw_ascii_ok8(370, 30, BLUE, "201741053057");
-
-	draw_ascii_ok16(680, 10, BLUE, "opq"); //ZH
-	draw_ascii_ok8(740, 10, BLUE, "Wu Zhenhang");
-	draw_ascii_ok8(680, 30, BLUE, "201741053075");
-	*/
 }
