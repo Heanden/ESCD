@@ -1,19 +1,16 @@
-#include "main.h"
 #include "ascii.h"
 #include "pic.h"
-
+typedef unsigned int u32;
+typedef unsigned short u16;
 #define GPF0CON (*(volatile unsigned long *)0xE0200120)
 #define GPF1CON (*(volatile unsigned long *)0xE0200140)
 #define GPF2CON (*(volatile unsigned long *)0xE0200160)
 #define GPF3CON (*(volatile unsigned long *)0xE0200180)
-
 #define GPD0CON (*(volatile unsigned long *)0xE02000A0)
 #define GPD0DAT (*(volatile unsigned long *)0xE02000A4)
-
 #define CLK_SRC1 (*(volatile unsigned long *)0xe0100204)
 #define CLK_DIV1 (*(volatile unsigned long *)0xe0100304)
 #define DISPLAY_CONTROL (*(volatile unsigned long *)0xe0107008)
-
 #define VIDCON0 (*(volatile unsigned long *)0xF8000000)
 #define VIDCON1 (*(volatile unsigned long *)0xF8000004)
 #define VIDTCON2 (*(volatile unsigned long *)0xF8000018)
@@ -23,10 +20,8 @@
 #define VIDOSD0A (*(volatile unsigned long *)0xF8000040)
 #define VIDOSD0B (*(volatile unsigned long *)0xF8000044)
 #define VIDOSD0C (*(volatile unsigned long *)0xF8000048)
-
 #define VIDW00ADD0B0 (*(volatile unsigned long *)0xF80000A0)
 #define VIDW00ADD1B0 (*(volatile unsigned long *)0xF80000D0)
-
 #define VIDTCON0 (*(volatile unsigned long *)0xF8000010)
 #define VIDTCON1 (*(volatile unsigned long *)0xF8000014)
 
@@ -71,16 +66,13 @@ u32 *pfb = (u32 *)FB_ADDR;
 // 初始化按键
 void key_init(void)
 {
-	//rGPH2CON&=~(0xffff);
 	rGPH2CON &= ~(0xFFFF << 0);
-	//rGPH0CON&=~(0xff<<8);
 	rGPH0CON &= ~(0xFF << 8);
 }
 
 void delay20ms(void)
 {
 	int i, j;
-
 	for (i = 0; i < 100; i++)
 	{
 		for (j = 0; j < 1000; j++)
@@ -88,6 +80,14 @@ void delay20ms(void)
 			i *j;
 		}
 	}
+}
+
+static void delay(void)
+{
+	volatile u32 i, j;
+	for (i = 0; i < 4000; i++)
+		for (j = 0; j < 1000; j++)
+			;
 }
 
 void lcd_init(void)
@@ -165,103 +165,11 @@ void lcd_draw_pixel(int x, int y, int color)
 static void lcd_draw_background(u32 color)
 {
 	u32 i, j;
-
 	for (j = 0; j < ROW; j++)
 	{
 		for (i = 0; i < COL; i++)
 		{
 			lcd_draw_pixel(i, j, color);
-		}
-	}
-}
-
-static void show_8_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
-{
-	// count记录当前正在绘制的像素的次序
-	int i, j, count = 0;
-
-	for (j = y; j < (y + 16); j++)
-	{
-		for (i = x; i < (x + 8); i++)
-		{
-			if (i < XSIZE && j < YSIZE)
-			{
-				// 在坐标(i, j)这个像素处判断是0还是1，如果是1写color；如果是0直接跳过
-				if (data[count / 8] & (1 << (count % 8)))
-					lcd_draw_pixel(i, j, color);
-			}
-			count++;
-		}
-	}
-}
-
-static void show_16_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
-{
-	// count记录当前正在绘制的像素的次序
-	int i, j, count = 0;
-
-	for (j = y; j < (y + 16); j++)
-	{
-		for (i = x; i < (x + 16); i++)
-		{
-			if (i < XSIZE && j < YSIZE)
-			{
-				// 在坐标(i, j)这个像素处判断是0还是1，如果是1写color；如果是0直接跳过
-				if (data[count / 8] & (1 << (count % 8)))
-					lcd_draw_pixel(i, j, color);
-			}
-			count++;
-		}
-	}
-}
-
-static void show_32_32(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
-{
-	// count记录当前正在绘制的像素的次序
-	int i, j, count = 0;
-
-	for (j = y; j < (y + 32); j++)
-	{
-		for (i = x; i < (x + 32); i++)
-		{
-			if (i < XSIZE && j < YSIZE)
-			{
-				// 在坐标(i, j)这个像素处判断是0还是1，如果是1写color；如果是0直接跳过
-				if (data[count / 8] & (1 << (count % 8)))
-					lcd_draw_pixel(i, j, color);
-			}
-			count++;
-		}
-	}
-}
-
-void draw_circular(unsigned int centerX, unsigned int centerY, unsigned int radius, unsigned int color)
-{
-	int x, y;
-	for (y = 0; y < XSIZE; y++)
-	{
-		for (x = 0; x < YSIZE; x++)
-		{
-			if (((y - centerY) * (y - centerY) + (x - centerX) * (x - centerX)) <= radius * radius)
-				lcd_draw_pixel(x, y, color);
-		}
-	}
-}
-
-void draw_ascii_ok32(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
-{
-	int i;
-	unsigned char *ch;
-	for (i = 0; str[i] != '\0'; i++)
-	{
-		ch = (unsigned char *)jmu_32_32[((unsigned char)str[i] - 97) * 8];
-		show_32_32(x, y, color, ch);
-
-		x += 40;
-		if (x >= XSIZE)
-		{
-			x -= XSIZE; // 回车
-			y += 32;	// 换行
 		}
 	}
 }
@@ -290,7 +198,6 @@ void lcd_draw_picture(const unsigned char *pData)
 	for (x = 0; x < COL; x++)
 	{
 		for (y = 0; y < ROW; y++)
-
 		{
 			lcd_draw_pixel(x, y, (pData[p] & (2 ^ pco)) ? 0x0000C0 : WHITE);
 			if (pco > 7)
@@ -299,6 +206,59 @@ void lcd_draw_picture(const unsigned char *pData)
 				p++;
 			}
 			pco++;
+		}
+	}
+}
+
+static void show_8_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
+{
+	// count记录当前正在绘制的像素的次序
+	int i, j, count = 0;
+	for (j = y; j < (y + 16); j++)
+	{
+		for (i = x; i < (x + 8); i++)
+		{
+			if (i < XSIZE && j < YSIZE)
+			{
+				if (data[count / 8] & (1 << (count % 8)))
+					lcd_draw_pixel(i, j, color);
+			}
+			count++;
+		}
+	}
+}
+
+void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
+{
+	int i;
+	unsigned char *ch;
+	for (i = 0; str[i] != '\0'; i++)
+	{
+		ch = (unsigned char *)ascii_8_16[(unsigned char)str[i] - 0x20];
+		show_8_16(x, y, color, ch);
+		x += 10;
+		if (x >= XSIZE)
+		{
+			x -= XSIZE; // 回车
+			y += 16;	// 换行
+		}
+	}
+}
+
+static void show_16_16(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
+{
+	int i, j, count = 0;
+
+	for (j = y; j < (y + 16); j++)
+	{
+		for (i = x; i < (x + 16); i++)
+		{
+			if (i < XSIZE && j < YSIZE)
+			{
+				if (data[count / 8] & (1 << (count % 8)))
+					lcd_draw_pixel(i, j, color);
+			}
+			count++;
 		}
 	}
 }
@@ -321,20 +281,50 @@ void draw_ascii_ok16(unsigned int x, unsigned int y, unsigned int color, unsigne
 	}
 }
 
-void draw_ascii_ok8(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
+static void show_32_32(unsigned int x, unsigned int y, unsigned int color, unsigned char *data)
+{
+	int i, j, count = 0;
+
+	for (j = y; j < (y + 32); j++)
+	{
+		for (i = x; i < (x + 32); i++)
+		{
+			if (i < XSIZE && j < YSIZE)
+			{
+				if (data[count / 8] & (1 << (count % 8)))
+					lcd_draw_pixel(i, j, color);
+			}
+			count++;
+		}
+	}
+}
+
+void draw_ascii_ok32(unsigned int x, unsigned int y, unsigned int color, unsigned char *str)
 {
 	int i;
 	unsigned char *ch;
 	for (i = 0; str[i] != '\0'; i++)
 	{
-		ch = (unsigned char *)ascii_8_16[(unsigned char)str[i] - 0x20];
-		show_8_16(x, y, color, ch);
-
-		x += 10;
+		ch = (unsigned char *)jmu_32_32[((unsigned char)str[i] - 97) * 8];
+		show_32_32(x, y, color, ch);
+		x += 40;
 		if (x >= XSIZE)
 		{
 			x -= XSIZE; // 回车
-			y += 16;	// 换行
+			y += 32;	// 换行
+		}
+	}
+}
+
+void draw_circular(unsigned int centerX, unsigned int centerY, unsigned int radius, unsigned int color)
+{
+	int x, y;
+	for (y = 0; y < XSIZE; y++)
+	{
+		for (x = 0; x < YSIZE; x++)
+		{
+			if (((y - centerY) * (y - centerY) + (x - centerX) * (x - centerX)) <= radius * radius)
+				lcd_draw_pixel(x, y, color);
 		}
 	}
 }
@@ -347,7 +337,6 @@ void draw_rectangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned 
 		temp = x2;
 		x2 = x1;
 		x1 = temp;
-
 		temp = y2;
 		y2 = y1;
 		y1 = temp;
@@ -376,6 +365,19 @@ void draw_rectangle(unsigned int x1, unsigned int y1, unsigned int x2, unsigned 
 	}
 }
 
+void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3, unsigned int color)
+{
+	int x, y;
+	for (x = 0; x <= COL; x++)
+	{
+		for (y = 0; y <= ROW; y++)
+		{
+			if (((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) + ((x3 - x2) * (y - y2) - (y3 - y2) * (x - x2)) + ((x3 - x1) * (y - y1) - (y3 - y1) * (x - x1)) <= (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1))
+				lcd_draw_pixel(x, y, color);
+		}
+	}
+}
+
 void draw_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned y2, unsigned int color)
 {
 	int x, y;
@@ -385,7 +387,6 @@ void draw_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned y2, u
 		temp = x1;
 		x1 = x2;
 		x2 = temp;
-
 		temp = y1;
 		y1 = y2;
 		y2 = temp;
@@ -419,13 +420,11 @@ void draw_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned y2, u
 	}
 }
 
-// glib库中的画线函数，可以画斜线，线两端分别是(x1, y1)和(x2, y2)
 void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y2, unsigned int color)
 {
 	int dx, dy, e;
 	dx = x2 - x1;
 	dy = y2 - y1;
-
 	if (dx >= 0)
 	{
 		if (dy >= 0) // dy>=0
@@ -571,29 +570,12 @@ void glib_line(unsigned int x1, unsigned int y1, unsigned int x2, unsigned int y
 	}
 }
 
-void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3, unsigned int color)
-{
-	int x, y;
-	for (x = 0; x <= COL; x++)
-	{
-		for (y = 0; y <= ROW; y++)
-		{
-			if (((x2 - x1) * (y - y1) - (y2 - y1) * (x - x1)) + ((x3 - x2) * (y - y2) - (y3 - y2) * (x - x2)) + ((x3 - x1) * (y - y1) - (y3 - y1) * (x - x1)) <= (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1))
-				lcd_draw_pixel(x, y, color);
-		}
-	}
-}
-
-void lcd_test(void)
+void AF(void)
 {
 	int menucase = 0;
-	lcd_init(); //1、LCD控制器初始化
-
+	lcd_init();
 	lcd_draw_background(0x000000);
-	//draw_triangle(100, 200, 500, 500, 300, 100, BLUE);
-
 	int pic_case = 0;
-
 	while (1)
 	{
 		if (!(rGPH0DAT & (1 << 2))) //left合照
@@ -618,24 +600,18 @@ void lcd_test(void)
 				{
 					lcd_draw_background(WHITE);
 					delay();
-					//draw_triangle(100, 200, 500, 500, 300, 100, BLUE);
 					draw_rectangle(700, 200, 1000, 400, BLUE);
-					delay();
-
 					draw_line(400, 400, 500, 200, BLUE);
 					draw_line(600, 400, 500, 200, BLUE);
 					draw_line(600, 400, 400, 400, BLUE);
-
 					glib_line(0, 245, 260, 245, BLUE);
 					glib_line(130, 150, 210, 390, BLUE);
 					glib_line(50, 390, 260, 245, BLUE);
 					glib_line(0, 245, 210, 390, BLUE);
 					glib_line(50, 390, 130, 150, BLUE);
-					delay();
-
 					draw_circular(399, 239, 50, BLUE);
 				}
-				menucase = 0; //right
+				menucase = 0;
 			}
 		}
 		else if (!(rGPH0DAT & (1 << 3))) //down 文字
@@ -651,15 +627,12 @@ void lcd_test(void)
 						pic_case = 0;
 					}
 					draw_ascii_ok32(352, 150, RED, "abcdefgh"); //jmu，cycu
-
-					draw_ascii_ok16(288, 450, BLUE, "ijk"); //FY
+					draw_ascii_ok16(288, 450, BLUE, "ijk");		//FY
 					draw_ascii_ok8(288, 480, BLUE, "Chen Feiyuan");
 					draw_ascii_ok8(288, 500, BLUE, "201741053072");
-
 					draw_ascii_ok16(560, 450, 0XF19EC2, "lmn"); //JM
 					draw_ascii_ok8(560, 480, BLUE, "Lin Junming");
 					draw_ascii_ok8(560, 500, BLUE, "201741053057");
-
 					draw_ascii_ok16(420, 450, BLUE, "opq"); //ZH
 					draw_ascii_ok8(420, 480, BLUE, "Wu Zhenhang");
 					draw_ascii_ok8(420, 500, BLUE, "201741053075");
@@ -684,22 +657,14 @@ void lcd_test(void)
 					delay();
 					lcd_draw_background(WHITE);
 					delay();
-					lcd_draw_background(0XE0E0E0);
-					delay();
 					lcd_draw_background(0XC0C0C0);
-					delay();
-					lcd_draw_background(0XA0A0A0);
 					delay();
 					lcd_draw_background(0X808080);
 					delay();
-					lcd_draw_background(0X606060);
-					delay();
 					lcd_draw_background(0X404040);
 					delay();
-					lcd_draw_background(0X202020);
-					delay();
 					lcd_draw_background(BLACK);
-				} //up
+				}
 				menucase = 0;
 			}
 		}
@@ -714,7 +679,7 @@ void lcd_test(void)
 				draw_ascii_ok8(427, 275, BLUE, "Screen Fresh <-up");
 				draw_ascii_ok8(427, 300, BLUE, "Text         <-down");
 				draw_ascii_ok8(427, 325, BLUE, "Group Photo  <-left");
-				draw_ascii_ok8(427, 350, BLUE, "Graphics     <-right"); //menu
+				draw_ascii_ok8(427, 350, BLUE, "Graphics     <-right");
 			}
 		}
 		else if (!(rGPH2DAT & (1 << 2))) //back
@@ -723,7 +688,6 @@ void lcd_test(void)
 			if (!(rGPH2DAT & (1 << 2)))
 			{
 				lcd_draw_background(0x000000);
-				//back
 				menucase = 0;
 			}
 		}

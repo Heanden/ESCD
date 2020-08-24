@@ -1,5 +1,5 @@
-led.bin: start.o led.o sdram_init.o lcd.o main.o
-	arm-linux-ld -Tlink.lds libgcc.a -o led.elf $^
+led.bin: start.o sdram_init.o lcd.o main.o
+	arm-linux-ld -Tlink.lds -o led.elf $^
 	arm-linux-objcopy -O binary led.elf led.bin
 	arm-linux-objdump -D led.elf > led_elf.dis
 	gcc mkv210_image.c -o mkx210
